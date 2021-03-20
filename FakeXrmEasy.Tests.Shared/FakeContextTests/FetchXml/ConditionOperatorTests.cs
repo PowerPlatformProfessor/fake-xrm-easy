@@ -119,6 +119,12 @@ namespace FakeXrmEasy.Tests.FakeContextTests.FetchXml
     public class ConditionOperatorTests
     {
         [Fact]
+        public void FetchXml_Operator_AboverOrEqual()
+        {
+
+
+        }
+        [Fact]
         public void FetchXml_Operator_Eq()
         {
             var ctx = new XrmFakedContext();

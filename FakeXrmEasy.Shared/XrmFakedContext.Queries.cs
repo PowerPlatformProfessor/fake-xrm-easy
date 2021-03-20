@@ -715,7 +715,6 @@ namespace FakeXrmEasy
                 case ConditionOperator.EqualUserId:
                     operatorExpression = TranslateConditionExpressionEqual(context, c, getNonBasicValueExpr, containsAttributeExpression);
                     break;
-
                 case ConditionOperator.NotEqualUserId:
                     operatorExpression = Expression.Not(TranslateConditionExpressionEqual(context, c, getNonBasicValueExpr, containsAttributeExpression));
                     break;
@@ -828,6 +827,9 @@ namespace FakeXrmEasy
                     operatorExpression = Expression.Not(TranslateConditionExpressionBetween(c, getNonBasicValueExpr, containsAttributeExpression));
                     break;
 #if !FAKE_XRM_EASY && !FAKE_XRM_EASY_2013
+                case ConditionOperator.AboveOrEqual:
+                    operatorExpression = TranslateConditionExpressionEqual(context, c, getNonBasicValueExpr, containsAttributeExpression);
+                    break;
                 case ConditionOperator.OlderThanXMinutes:
                 case ConditionOperator.OlderThanXHours:
                 case ConditionOperator.OlderThanXDays:
@@ -1435,7 +1437,10 @@ namespace FakeXrmEasy
 
             return conditionValue;
         }
-
+        protected static Expression TranslateConditionExpressionAboveOrEqual(XrmFakedContext context, TypedConditionExpression tc, Expression getAttributeValueExpr, Expression containsAttributeExpr)
+        {
+            return null;
+        }
         protected static Expression TranslateConditionExpressionIn(TypedConditionExpression tc, Expression getAttributeValueExpr, Expression containsAttributeExpr)
         {
             var c = tc.CondExpression;

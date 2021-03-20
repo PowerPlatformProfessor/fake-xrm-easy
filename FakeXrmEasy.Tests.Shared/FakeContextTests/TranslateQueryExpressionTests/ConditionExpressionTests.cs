@@ -28,7 +28,25 @@ namespace FakeXrmEasy.Tests.FakeContextTests.TranslateQueryExpressionTests
 
             Assert.Throws<PullRequestException>(() => XrmFakedContext.TranslateQueryExpressionToLinq(context, qe).ToList());
         }
+        [Fact]
+        public void When_executing_a_query_with_aboveorequals_oprator_right_result_is_returned()
+        {
+            var context = new XrmFakedContext();
+            var account1 = new Entity("account") { Id = Guid.NewGuid() };
+            var account2 = new Entity("account") { Id = Guid.NewGuid() }; account2["parrentaccountid"] = account1.ToEntityReference();
 
+            context.Initialize(new List<Entity>() { account1, account2 });
+
+            var qe = new QueryExpression("account");
+            qe.ColumnSet.AllColumns = true;
+#if !FAKE_XRM_EASY && !FAKE_XRM_EASY_2013
+            qe.Criteria.AddCondition("accountid", ConditionOperator.AboveOrEqual, account2.Id);
+#endif
+            //TranslateConditionExpressionAboveOrEqual
+            var result = XrmFakedContext.TranslateQueryExpressionToLinq(context, qe).ToList();
+
+            Assert.True(result.Count() == 2);
+        }
         [Fact]
         public void When_executing_a_query_expression_with_equals_operator_right_result_is_returned()
         {

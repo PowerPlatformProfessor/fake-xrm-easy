@@ -577,6 +577,9 @@ namespace FakeXrmEasy.Extensions.FetchXml
                 case "olderthan-x-years":
                     op = ConditionOperator.OlderThanXYears;
                     break;
+                case "eq-or-above":
+                    op = ConditionOperator.AboveOrEqual;
+                    break;
 #endif
 #if FAKE_XRM_EASY_9
                 case "contain-values":
