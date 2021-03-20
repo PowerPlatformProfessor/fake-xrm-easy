@@ -828,7 +828,7 @@ namespace FakeXrmEasy
                     break;
 #if !FAKE_XRM_EASY && !FAKE_XRM_EASY_2013
                 case ConditionOperator.AboveOrEqual:
-                    operatorExpression = TranslateConditionExpressionEqual(context, c, getNonBasicValueExpr, containsAttributeExpression);
+                    operatorExpression = TranslateConditionExpressionAboveOrEqual(context, c, getNonBasicValueExpr, containsAttributeExpression);
                     break;
                 case ConditionOperator.OlderThanXMinutes:
                 case ConditionOperator.OlderThanXHours:
@@ -1437,9 +1437,26 @@ namespace FakeXrmEasy
 
             return conditionValue;
         }
-        protected static Expression TranslateConditionExpressionAboveOrEqual(XrmFakedContext context, TypedConditionExpression tc, Expression getAttributeValueExpr, Expression containsAttributeExpr)
+        protected static Expression TranslateConditionExpressionAboveOrEqual(XrmFakedContext context, TypedConditionExpression c, Expression getAttributeValueExpr, Expression containsAttributeExpr)
         {
-            return null;
+            var expOrValues = Expression.Or(Expression.Constant(false), Expression.Constant(false));
+
+            foreach (object value in c.CondExpression.Values) //debugga denna koden, kolla hur den lirar :))
+            {
+                var leftHandSideExpression = GetAppropiateCastExpressionBasedOnType(c.AttributeType, getAttributeValueExpr, value);
+                var transformedExpression = TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, leftHandSideExpression);
+
+                expOrValues = Expression.Or(expOrValues, Expression.Equal(
+                            transformedExpression,
+                            TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, GetAppropiateTypedValueAndType(value, c.AttributeType))));
+
+
+            }
+
+            return Expression.AndAlso(
+                            containsAttributeExpr,
+                            Expression.AndAlso(Expression.NotEqual(getAttributeValueExpr, Expression.Constant(null)),
+                                expOrValues));
         }
         protected static Expression TranslateConditionExpressionIn(TypedConditionExpression tc, Expression getAttributeValueExpr, Expression containsAttributeExpr)
         {
