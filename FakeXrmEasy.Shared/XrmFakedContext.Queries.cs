@@ -1443,13 +1443,39 @@ namespace FakeXrmEasy
 
             foreach (object value in c.CondExpression.Values) //debugga denna koden, kolla hur den lirar :))
             {
-                var leftHandSideExpression = GetAppropiateCastExpressionBasedOnType(c.AttributeType, getAttributeValueExpr, value);
-                var transformedExpression = TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, leftHandSideExpression);
+                var guid = (Guid)value;
+                var entities = context.Data.Values.FirstOrDefault(item => item.Values.Where(ent => ent.Id == guid).Count() == 1);
+                var currentEntity = entities[guid];
 
-                expOrValues = Expression.Or(expOrValues, Expression.Equal(
-                            transformedExpression,
-                            TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, GetAppropiateTypedValueAndType(value, c.AttributeType))));
+                var hiearchyGuidBottomToTop = new List<Guid>() { currentEntity.Id };
 
+                EntityReference selfReference = null;
+                do
+                {
+                    selfReference = (EntityReference)currentEntity.Attributes.Values.FirstOrDefault(atr => atr.GetType() == typeof(EntityReference) && ((EntityReference)atr).LogicalName == currentEntity.LogicalName);
+                    
+                    if (selfReference != null)
+                    {
+                        hiearchyGuidBottomToTop.Add(selfReference.Id);
+                        currentEntity = entities[selfReference.Id];
+                    }
+                    
+                } while (selfReference != null);
+
+                foreach (var hiearchyguid in hiearchyGuidBottomToTop)
+                {
+                    var leftHandSideExpression = GetAppropiateCastExpressionBasedOnType(c.AttributeType, getAttributeValueExpr, hiearchyguid);
+                    var transformedExpression = TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, leftHandSideExpression);
+
+                    expOrValues = Expression.Or(expOrValues, Expression.Equal(
+                                transformedExpression,
+                                TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, GetAppropiateTypedValueAndType(hiearchyguid, c.AttributeType))));
+                }
+
+                //gör som i ÌN
+                //expOrValues = Expression.Or(expOrValues, Expression.Equal(
+                //                    GetAppropiateCastExpressionBasedOnType(tc.AttributeType, getAttributeValueExpr, value),
+                //                    GetAppropiateTypedValueAndType(value, tc.AttributeType)));
 
             }
 

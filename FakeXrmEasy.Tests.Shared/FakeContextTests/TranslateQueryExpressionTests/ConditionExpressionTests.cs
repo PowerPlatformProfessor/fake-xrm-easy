@@ -33,9 +33,11 @@ namespace FakeXrmEasy.Tests.FakeContextTests.TranslateQueryExpressionTests
         {
             var context = new XrmFakedContext();
             var account1 = new Entity("account") { Id = Guid.NewGuid() };
-            var account2 = new Entity("account") { Id = Guid.NewGuid() }; account2["parrentaccountid"] = account1.ToEntityReference();
+            var account2 = new Entity("account") { Id = Guid.NewGuid() }; 
+            account2["parrentaccountid"] = account1.ToEntityReference();
+            var account3 = new Entity("account") { Id = Guid.NewGuid() };
 
-            context.Initialize(new List<Entity>() { account1, account2 });
+            context.Initialize(new List<Entity>() { account1, account2, account3 });
 
             var qe = new QueryExpression("account");
             qe.ColumnSet.AllColumns = true;
