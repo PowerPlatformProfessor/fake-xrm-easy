@@ -1441,7 +1441,7 @@ namespace FakeXrmEasy
         {
             var expOrValues = Expression.Or(Expression.Constant(false), Expression.Constant(false));
 
-            foreach (object value in c.CondExpression.Values) //debugga denna koden, kolla hur den lirar :))
+            foreach (object value in c.CondExpression.Values) 
             {
                 var guid = (Guid)value;
                 var entities = context.Data.Values.FirstOrDefault(item => item.Values.Where(ent => ent.Id == guid).Count() == 1);
@@ -1472,10 +1472,6 @@ namespace FakeXrmEasy
                                 TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, GetAppropiateTypedValueAndType(hiearchyguid, c.AttributeType))));
                 }
 
-                //gör som i ÌN
-                //expOrValues = Expression.Or(expOrValues, Expression.Equal(
-                //                    GetAppropiateCastExpressionBasedOnType(tc.AttributeType, getAttributeValueExpr, value),
-                //                    GetAppropiateTypedValueAndType(value, tc.AttributeType)));
 
             }
 
