@@ -34,7 +34,7 @@ namespace FakeXrmEasy.Tests.FakeContextTests.TranslateQueryExpressionTests
             var context = new XrmFakedContext();
             var account1 = new Entity("account") { Id = Guid.NewGuid() };
             var account2 = new Entity("account") { Id = Guid.NewGuid() }; 
-            account2["parrentaccountid"] = account1.ToEntityReference();
+            account2["parentaccountid"] = account1.ToEntityReference();
             var account3 = new Entity("account") { Id = Guid.NewGuid() };
 
             context.Initialize(new List<Entity>() { account1, account2, account3 });
@@ -48,6 +48,43 @@ namespace FakeXrmEasy.Tests.FakeContextTests.TranslateQueryExpressionTests
             var result = XrmFakedContext.TranslateQueryExpressionToLinq(context, qe).ToList();
 
             Assert.True(result.Count() == 2);
+        }
+        [Fact]
+        public void When_executing_a_query_with_aboveorequals_oprator_in_LinkedEntity_right_result_is_returned()
+        {
+            var context = new XrmFakedContext();
+            var account1 = new Entity("account") { Id = Guid.NewGuid() };
+            var account2 = new Entity("account") { Id = Guid.NewGuid() };
+            account2["parentaccountid"] = account1.ToEntityReference();
+            var account3 = new Entity("account") { Id = Guid.NewGuid() };
+
+            var contact1 = new Entity("contact") { Id = Guid.NewGuid() };
+            contact1["parentcustomerid"] = account1.ToEntityReference();
+
+            var contact2 = new Entity("contact") { Id = Guid.NewGuid() };
+            contact1["parentcustomerid"] = account1.ToEntityReference();
+
+            var contact3 = new Entity("contact") { Id = Guid.NewGuid() };
+            contact1["parentcustomerid"] = account2.ToEntityReference();
+
+            var contact4 = new Entity("contact") { Id = Guid.NewGuid() };
+            contact1["parentcustomerid"] = account3.ToEntityReference();
+
+            context.Initialize(new List<Entity>() { account1, account2, account3, contact1, contact2, contact3, contact4 });
+
+
+            // Instantiate QueryExpression query
+            var query = new QueryExpression("contact");
+            query.ColumnSet.AllColumns = true;
+            var query_account = query.AddLink("account", "parentcustomerid", "accountid");
+
+#if !FAKE_XRM_EASY && !FAKE_XRM_EASY_2013
+            query_account.LinkCriteria.AddCondition("accountid", ConditionOperator.AboveOrEqual, account2.Id);
+#endif
+            //TranslateConditionExpressionAboveOrEqual
+            var result = XrmFakedContext.TranslateQueryExpressionToLinq(context, query).ToList();
+
+            Assert.True(result.Count() == 3);
         }
         [Fact]
         public void When_executing_a_query_expression_with_equals_operator_right_result_is_returned()
