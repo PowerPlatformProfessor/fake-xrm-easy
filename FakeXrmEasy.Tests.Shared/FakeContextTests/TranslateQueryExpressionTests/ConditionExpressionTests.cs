@@ -62,13 +62,13 @@ namespace FakeXrmEasy.Tests.FakeContextTests.TranslateQueryExpressionTests
             contact1["parentcustomerid"] = account1.ToEntityReference();
 
             var contact2 = new Entity("contact") { Id = Guid.NewGuid() };
-            contact1["parentcustomerid"] = account1.ToEntityReference();
+            contact2["parentcustomerid"] = account1.ToEntityReference();
 
             var contact3 = new Entity("contact") { Id = Guid.NewGuid() };
-            contact1["parentcustomerid"] = account2.ToEntityReference();
+            contact3["parentcustomerid"] = account2.ToEntityReference();
 
             var contact4 = new Entity("contact") { Id = Guid.NewGuid() };
-            contact1["parentcustomerid"] = account3.ToEntityReference();
+            contact4["parentcustomerid"] = account3.ToEntityReference();
 
             context.Initialize(new List<Entity>() { account1, account2, account3, contact1, contact2, contact3, contact4 });
 

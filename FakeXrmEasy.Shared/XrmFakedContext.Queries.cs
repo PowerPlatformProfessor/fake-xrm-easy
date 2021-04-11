@@ -316,7 +316,7 @@ namespace FakeXrmEasy
             {
                 if (!Regex.IsMatch(le.EntityAlias, "^[A-Za-z_](\\w|\\.)*$", RegexOptions.ECMAScript))
                 {
-                FakeOrganizationServiceFault.Throw(ErrorCodes.QueryBuilderInvalid_Alias, $"Invalid character specified for alias: {le.EntityAlias}. Only characters within the ranges [A-Z], [a-z] or [0-9] or _ are allowed.  The first character may only be in the ranges [A-Z], [a-z] or _.");
+                    FakeOrganizationServiceFault.Throw(ErrorCodes.QueryBuilderInvalid_Alias, $"Invalid character specified for alias: {le.EntityAlias}. Only characters within the ranges [A-Z], [a-z] or [0-9] or _ are allowed.  The first character may only be in the ranges [A-Z], [a-z] or _.");
                 }
             }
 
@@ -655,7 +655,7 @@ namespace FakeXrmEasy
         }
 #endif
 
-        protected static Expression TranslateConditionExpression(QueryExpression qe, XrmFakedContext context, TypedConditionExpression c, ParameterExpression entity)
+        protected static Expression TranslateConditionExpression(QueryExpression qe, XrmFakedContext context, TypedConditionExpression c, ParameterExpression entity, bool isLinkedEntity = false)
         {
             Expression attributesProperty = Expression.Property(
                 entity,
@@ -828,7 +828,7 @@ namespace FakeXrmEasy
                     break;
 #if !FAKE_XRM_EASY && !FAKE_XRM_EASY_2013
                 case ConditionOperator.AboveOrEqual:
-                    operatorExpression = TranslateConditionExpressionAboveOrEqual(context, c, getNonBasicValueExpr, containsAttributeExpression);
+                    operatorExpression = TranslateConditionExpressionAboveOrEqual(context, c, getNonBasicValueExpr, containsAttributeExpression, qe.EntityName, isLinkedEntity);
                     break;
                 case ConditionOperator.OlderThanXMinutes:
                 case ConditionOperator.OlderThanXHours:
@@ -840,11 +840,11 @@ namespace FakeXrmEasy
                     operatorExpression = TranslateConditionExpressionOlderThan(c, getNonBasicValueExpr, containsAttributeExpression);
                     break;
 
-                case ConditionOperator.NextXHours:               
-                case ConditionOperator.NextXDays:                  
+                case ConditionOperator.NextXHours:
+                case ConditionOperator.NextXDays:
                 case ConditionOperator.Next7Days:
-                case ConditionOperator.NextXWeeks:                 
-                case ConditionOperator.NextXMonths:                    
+                case ConditionOperator.NextXWeeks:
+                case ConditionOperator.NextXMonths:
                 case ConditionOperator.NextXYears:
                     operatorExpression = TranslateConditionExpressionNext(c, getNonBasicValueExpr, containsAttributeExpression);
                     break;
@@ -1437,42 +1437,104 @@ namespace FakeXrmEasy
 
             return conditionValue;
         }
-        protected static Expression TranslateConditionExpressionAboveOrEqual(XrmFakedContext context, TypedConditionExpression c, Expression getAttributeValueExpr, Expression containsAttributeExpr)
+        protected static Expression TranslateConditionExpressionAboveOrEqual(XrmFakedContext context, TypedConditionExpression c, Expression getAttributeValueExpr, Expression containsAttributeExpr, string entityName, bool isLinkedEntity = false)
         {
             var expOrValues = Expression.Or(Expression.Constant(false), Expression.Constant(false));
 
-            foreach (object value in c.CondExpression.Values) 
+            if (isLinkedEntity)
             {
-                var guid = (Guid)value;
-                var entities = context.Data.Values.FirstOrDefault(item => item.Values.Where(ent => ent.Id == guid).Count() == 1);
-                var currentEntity = entities[guid];
-
-                var hiearchyGuidBottomToTop = new List<Guid>() { currentEntity.Id };
-
-                EntityReference selfReference = null;
-                do
+                foreach (object value in c.CondExpression.Values)
                 {
-                    selfReference = (EntityReference)currentEntity.Attributes.Values.FirstOrDefault(atr => atr.GetType() == typeof(EntityReference) && ((EntityReference)atr).LogicalName == currentEntity.LogicalName);
-                    
-                    if (selfReference != null)
+
+                    //hitta kontaktentiteten (entityName entiteten ) som har en attribute med entityreference till guiden som användes i above or equal
+                    var guid = (Guid)value; //above or equal guid
+                    var entities = context.Data[entityName];
+                    var linkEntities = context.Data.Values.FirstOrDefault(item => item.Values.Where(ent => ent.Id == guid).Count() == 1);
+
+                    var currentLinkEntity = linkEntities[guid];
+
+                    var hiearchyLinkedEntitiesGuidBottomToTop = new List<Guid>() { currentLinkEntity.Id };
+
+                    EntityReference selfReference = null;
+                    do
                     {
-                        hiearchyGuidBottomToTop.Add(selfReference.Id);
-                        currentEntity = entities[selfReference.Id];
+                        selfReference = (EntityReference)currentLinkEntity.Attributes.Values.FirstOrDefault(atr => atr.GetType() == typeof(EntityReference) && ((EntityReference)atr).LogicalName == currentLinkEntity.LogicalName);
+
+                        if (selfReference != null)
+                        {
+                            hiearchyLinkedEntitiesGuidBottomToTop.Add(selfReference.Id);
+                            currentLinkEntity = linkEntities[selfReference.Id];
+                        }
+
+                    } while (selfReference != null);
+
+                    var hiearchyEntitesGuidBottomToTop = new List<Guid>();
+                    foreach (var linkEntity in hiearchyLinkedEntitiesGuidBottomToTop)
+                    {
+                        //ta reda på vilket som är linkEntity relations attributet
+                        foreach(var ent in entities)
+                        {
+                            if (ent.Value.Attributes.Where(atr => atr.Value.GetType() == typeof(EntityReference) && ent.Value.GetAttributeValue<EntityReference>(atr.Key).Id == linkEntity).Count() > 0)
+                            {
+                                hiearchyEntitesGuidBottomToTop.Add(ent.Key);
+                            }
+                        }
+                       
+                        
+                        //find entity in entites with reference to selfreference entity
+                        //add that to con
                     }
-                    
-                } while (selfReference != null);
 
-                foreach (var hiearchyguid in hiearchyGuidBottomToTop)
-                {
-                    var leftHandSideExpression = GetAppropiateCastExpressionBasedOnType(c.AttributeType, getAttributeValueExpr, hiearchyguid);
-                    var transformedExpression = TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, leftHandSideExpression);
 
-                    expOrValues = Expression.Or(expOrValues, Expression.Equal(
-                                transformedExpression,
-                                TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, GetAppropiateTypedValueAndType(hiearchyguid, c.AttributeType))));
+
+                    foreach (var hiearchyguid in hiearchyEntitesGuidBottomToTop)
+                    {
+                        var leftHandSideExpression = GetAppropiateCastExpressionBasedOnType(c.AttributeType, getAttributeValueExpr, hiearchyguid);
+                        var transformedExpression = TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, leftHandSideExpression);
+
+                        expOrValues = Expression.Or(expOrValues, Expression.Equal(
+                                    transformedExpression,
+                                    TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, GetAppropiateTypedValueAndType(hiearchyguid, c.AttributeType))));
+                    }
+
+
                 }
+            }
+            else
+            {
+                foreach (object value in c.CondExpression.Values)
+                {
+                    var guid = (Guid)value;
+                    var entities = context.Data.Values.FirstOrDefault(item => item.Values.Where(ent => ent.Id == guid).Count() == 1);
+                    var currentEntity = entities[guid];
+
+                    var hiearchyGuidBottomToTop = new List<Guid>() { currentEntity.Id };
+
+                    EntityReference selfReference = null;
+                    do
+                    {
+                        selfReference = (EntityReference)currentEntity.Attributes.Values.FirstOrDefault(atr => atr.GetType() == typeof(EntityReference) && ((EntityReference)atr).LogicalName == currentEntity.LogicalName);
+
+                        if (selfReference != null)
+                        {
+                            hiearchyGuidBottomToTop.Add(selfReference.Id);
+                            currentEntity = entities[selfReference.Id];
+                        }
+
+                    } while (selfReference != null);
+
+                    foreach (var hiearchyguid in hiearchyGuidBottomToTop)
+                    {
+                        var leftHandSideExpression = GetAppropiateCastExpressionBasedOnType(c.AttributeType, getAttributeValueExpr, hiearchyguid);
+                        var transformedExpression = TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, leftHandSideExpression);
+
+                        expOrValues = Expression.Or(expOrValues, Expression.Equal(
+                                    transformedExpression,
+                                    TransformExpressionValueBasedOnOperator(c.CondExpression.Operator, GetAppropiateTypedValueAndType(hiearchyguid, c.AttributeType))));
+                    }
 
 
+                }
             }
 
             return Expression.AndAlso(
@@ -1721,10 +1783,10 @@ namespace FakeXrmEasy
                     break;
             }
 
-            c.Values.Clear();          
+            c.Values.Clear();
             c.Values.Add(beforeDateTime);
             c.Values.Add(currentDateTime);
-            
+
             return TranslateConditionExpressionBetween(tc, getAttributeValueExpr, containsAttributeExpr);
         }
 
@@ -1841,10 +1903,10 @@ namespace FakeXrmEasy
                     break;
 #endif
             }
-                        
+
             return TranslateConditionExpressionOlderThan(tc, getAttributeValueExpr, containsAttributeExpr, toDate);
         }
-     
+
 
         protected static Expression TranslateConditionExpressionBetween(TypedConditionExpression tc, Expression getAttributeValueExpr, Expression containsAttributeExpr)
         {
@@ -1968,7 +2030,7 @@ namespace FakeXrmEasy
 
         }
 
-        protected static BinaryExpression TranslateMultipleConditionExpressions(QueryExpression qe, XrmFakedContext context, string sEntityName, List<ConditionExpression> conditions, LogicalOperator op, ParameterExpression entity, bool bIsOuter)
+        protected static BinaryExpression TranslateMultipleConditionExpressions(QueryExpression qe, XrmFakedContext context, string sEntityName, List<ConditionExpression> conditions, LogicalOperator op, ParameterExpression entity, bool bIsOuter, bool isLinkedEntity = false)
         {
             BinaryExpression binaryExpression = null;  //Default initialisation depending on logical operator
             if (op == LogicalOperator.And)
@@ -2004,7 +2066,8 @@ namespace FakeXrmEasy
 
 #else
                     //CRM 2011
-                    if (c.AttributeName.IndexOf(".") >= 0) {
+                    if (c.AttributeName.IndexOf(".") >= 0)
+                    {
                         var alias = c.AttributeName.Split('.')[0];
                         cEntityName = qe.GetEntityNameFromAlias(alias);
                         sAttributeName = c.AttributeName.Split('.')[1];
@@ -2035,10 +2098,10 @@ namespace FakeXrmEasy
                 //Build a binary expression  
                 if (op == LogicalOperator.And)
                 {
-                    binaryExpression = Expression.And(binaryExpression, TranslateConditionExpression(qe, context, typedExpression, entity));
+                    binaryExpression = Expression.And(binaryExpression, TranslateConditionExpression(qe, context, typedExpression, entity, isLinkedEntity));
                 }
                 else
-                    binaryExpression = Expression.Or(binaryExpression, TranslateConditionExpression(qe, context, typedExpression, entity));
+                    binaryExpression = Expression.Or(binaryExpression, TranslateConditionExpression(qe, context, typedExpression, entity, isLinkedEntity));
             }
 
             return binaryExpression;
@@ -2126,7 +2189,7 @@ namespace FakeXrmEasy
             }
 
             //Translate this specific Link Criteria
-            linkedEntitiesQueryExpressions.Add(TranslateFilterExpressionToExpression(qe, context, le.LinkToEntityName, le.LinkCriteria, entity, le.JoinOperator == JoinOperator.LeftOuter));
+            linkedEntitiesQueryExpressions.Add(TranslateFilterExpressionToExpression(qe, context, le.LinkToEntityName, le.LinkCriteria, entity, le.JoinOperator == JoinOperator.LeftOuter, true));
 
             //Processed nested linked entities
             foreach (var nestedLinkedEntity in le.LinkEntities)
@@ -2176,7 +2239,7 @@ namespace FakeXrmEasy
                 return TranslateFilterExpressionToExpression(qe, context, qe.EntityName, qe.Criteria, entity, false);
             }
         }
-        protected static Expression TranslateFilterExpressionToExpression(QueryExpression qe, XrmFakedContext context, string sEntityName, FilterExpression fe, ParameterExpression entity, bool bIsOuter)
+        protected static Expression TranslateFilterExpressionToExpression(QueryExpression qe, XrmFakedContext context, string sEntityName, FilterExpression fe, ParameterExpression entity, bool bIsOuter, bool isLinkedEntity = false)
         {
             if (fe == null) return Expression.Constant(true);
 
@@ -2184,7 +2247,7 @@ namespace FakeXrmEasy
             BinaryExpression filtersLambda = null;
             if (fe.Conditions != null && fe.Conditions.Count > 0)
             {
-                conditionsLambda = TranslateMultipleConditionExpressions(qe, context, sEntityName, fe.Conditions.ToList(), fe.FilterOperator, entity, bIsOuter);
+                conditionsLambda = TranslateMultipleConditionExpressions(qe, context, sEntityName, fe.Conditions.ToList(), fe.FilterOperator, entity, bIsOuter, isLinkedEntity);
             }
 
             //Process nested filters recursively
@@ -2229,9 +2292,9 @@ namespace FakeXrmEasy
                 case ConditionOperator.Next7Days:
                     nextDateTime = currentDateTime.AddDays(7);
                     break;
-                case ConditionOperator.NextXWeeks:                  
+                case ConditionOperator.NextXWeeks:
                     nextDateTime = currentDateTime.AddDays(7 * (int)c.Values[0]);
-                    break;              
+                    break;
                 case ConditionOperator.NextXMonths:
                     nextDateTime = currentDateTime.AddMonths((int)c.Values[0]);
                     break;
